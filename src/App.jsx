@@ -154,7 +154,161 @@ export default function App() {
       return () => clearInterval(interval);
     }
   }, [currentScreen]);
+  // Auth Handlers
+  const handleLogin = (e) => {
+    e.preventDefault();
+    if (authRole === 'admin') {
+      if (
+        authInput.identifier === ADMIN_CREDENTIALS.username ||
+        authInput.identifier === ADMIN_CREDENTIALS.identifier
+      ) {
+        setCurrentUser({ role: 'admin', name: ADMIN_CREDENTIALS.name });
+        setCurrentScreen('dashboard');
+        showToast('Welcome Vikram Singh!');
+      } else {
+        showToast('Invalid Admin Credentials', 'error');
+      }
+    } else if (authRole === 'trainer') {
+      const t = trainers.find(
+        (x) => x.email === authInput.identifier || x.phone === authInput.identifier
+      );
+      if (t) {
+        setCurrentUser({ ...t, role: 'trainer' });
+        setCurrentScreen('dashboard');
+        showToast(`Welcome Coach ${t.name}!`);
+      } else {
+        showToast('Trainer not found', 'error');
+      }
+    } else {
+      const m = members.find(
+        (x) =>
+          x.memberId === authInput.identifier ||
+          x.phone === authInput.identifier ||
+          x.email === authInput.identifier
+      );
+      if (m) {
+        setCurrentUser({ ...m, role: 'member' });
+        setCurrentScreen('dashboard');
+        showToast(`Welcome ${m.fullName}!`);
+      } else {
+        showToast('Member not found', 'error');
+      }
+    }
+  };
 
+  const handleRegister = (e) => {
+    e.preventDefault();
+    if (authRole === 'member') {
+      const newId = 'm-' + Date.now();
+      const memberCode = 'IP-' + Math.floor(1000 + Math.random() * 9000);
+      const newMember = {
+        id: newId,
+        memberId: memberCode,
+        fullName: authInput.fullName,
+        phone: authInput.phone,
+        gender: authInput.gender,
+        monthsEnrolled: authInput.months,
+        planTitle: `${authInput.months} Month(s)`,
+        joinDate: new Date().toISOString().split('T')[0],
+        status: 'Active',
+        balanceDue: authInput.months * 700,
+      };
+      setMembers([...members, newMember]);
+      setCurrentUser({ ...newMember, role: 'member' });
+      setCurrentScreen('dashboard');
+      showToast('Registration Successful!');
+    } else if (authRole === 'trainer') {
+      const newTrainer = {
+        id: 't-' + Date.now(),
+        name: authInput.fullName,
+        phone: authInput.phone,
+        specialty: authInput.specialty,
+        experience: authInput.experience,
+        active: true,
+      };
+      setTrainers([...trainers, newTrainer]);
+      setCurrentUser({ ...newTrainer, role: 'trainer' });
+      setCurrentScreen('dashboard');
+      showToast('Trainer Registered!');
+    }
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setCurrentScreen('showcase');
+    showToast('Logged out successfully');
+  };
+
+  // Admin Stats Calculations
+  const stats = useMemo(() => {
+    const totalM = members.length;
+    const activeM = members.filter((m) => m.status === 'Active').length;
+    const pendingM = members.filter((m) => m.status === 'Pending').length;
+    const pendingT = trainers.filter((t) => t.status === 'Pending').length;
+    const todayAtt = attendance.length;
+    const totalCash = payments
+      .filter((p) => p.method === 'Cash')
+      .reduce((acc, curr) => acc + (curr.amount || 0), 0);
+    const totalUPI = payments
+      .filter((p) => p.method === 'UPI')
+      .reduce((acc, curr) => acc + (curr.amount || 0), 0);
+    const totalIncome = totalCash + totalUPI;
+    const totalExp = expenses.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+    const netProfit = totalIncome - totalExp;
+
+    return {
+      totalM,
+      activeM,
+      pendingM,
+      pendingT,
+      totalPending: pendingM + pendingT,
+      todayAtt,
+      totalCash,
+      totalUPI,
+      totalIncome,
+      totalExp,
+      netProfit,
+      pendingDues: 0,
+    };
+  }, [members, trainers, attendance, payments, expenses]);
+
+  // Action Handlers
+  const handleCheckIn = (id, method) => {
+    setAttendance((prev) => [
+      ...prev,
+      {
+        id: 'att-' + Date.now(),
+        memberId: id,
+        memberName: id,
+        checkInTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        method: method || 'Desk',
+      },
+    ]);
+    showToast('Check-in successful!');
+  };
+
+  const handleCheckOut = (id) => {
+    setAttendance((prev) => prev.filter((a) => a.id !== id));
+    showToast('Checked out!');
+  };
+
+  const handleVerifyUPI = (id) => {
+    setPayments((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, status: 'Verified' } : p))
+    );
+    showToast('Payment verified');
+  };
+
+  const handleApproveMember = () => {};
+  const handleRejectMember = () => {};
+  const handleApproveTrainer = () => {};
+  const handleRejectTrainer = () => {};
+  const handleRecordPayment = (paymentData) => {
+    setPayments((prev) => [...prev, { ...paymentData, id: 'RCP-' + Date.now(), status: 'Verified' }]);
+    setActiveModal(null);
+    showToast('Payment recorded');
+  };
+        
   // =============================================================
   // 1. SPLASH SCREEN
   // =============================================================
